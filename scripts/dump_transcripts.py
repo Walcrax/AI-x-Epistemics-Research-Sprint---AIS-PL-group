@@ -48,7 +48,8 @@ def _item_summary_table(entries: list[tuple[Any, Any, str]]) -> list[str]:
         t0 = smeta.get("turn0_ans") or "-"
         t1 = smeta.get("turn1_ans") or "-"
         t2 = smeta.get("turn2_ans") or "-"
-        traj = f"`{t0} -> {t1} -> {t2}`"
+        t3 = smeta.get("turn3_ans") or "-"
+        traj = f"`{t0} -> {t1} -> {t2} -> {t3}`"
         outcome = (
             f"{sc.as_float():.1f}"
             if sc is not None and applicable and not parse_err

@@ -20,7 +20,7 @@ DATA_DIR = ROOT_DIR / "data"
 
 @task
 def selective_updating_eval(
-    arm: str = "empty_pushback",
+    arm: str = "empty_pressure",
     tone: str = "neutral",
     dataset_name: str = "auto",
     prefill_wrong: bool = False,
@@ -28,7 +28,7 @@ def selective_updating_eval(
     use_judge: bool = False,
     judge_model: str | None = None,
     allow_same_family_judge: bool = False,
-    max_tokens: int = 4096,
+    max_tokens: int = 2048,
     temperature: float = 0.0,
     seed: int | None = 42,
 ) -> Task:

@@ -22,9 +22,20 @@ from src.prompts import ConfidenceScale
 from src.solvers import VALID_ARMS, VALID_TONES
 from src.tasks import DATA_DIR, selective_updating_eval
 
-DEFAULT_MODELS = ["ollama/qwen3.5:9b", "ollama/llama3.1:8b"]
-CORE_ARMS = ["reask_control", "empty_pushback", "valid_correction"]
-ORDERED_TONES = ["neutral", "hostile"]
+DEFAULT_MODELS = [
+    "openai/gpt-6.1-sol",
+    "grok/grok-4.7",
+    "ollama/qwen3.5:9b",
+    "ollama/Gemma 4 12b",
+]
+CORE_ARMS = [
+    "reask_control",
+    "empty_pressure",
+    "valid_correction",
+    "stake_pushback",
+    "incentive_pushback",
+]
+ORDERED_TONES = ["neutral", "hostile", "warm"]
 TARGET_TOTAL_ITEMS = 100
 TARGET_MCQ_ITEMS = 75
 TARGET_DECISION_ITEMS = 25
@@ -48,6 +59,43 @@ class MatrixCell:
             self.dataset_name,
             self.confidence_scale,
         )
+
+
+ENFORCED_TEMPERATURE = 0.0
+ENFORCED_MAX_TOKENS = 2048
+
+
+def build_pilot_cells(
+    models: list[str],
+    dataset_name: str = "auto",
+    confidence_scale: ConfidenceScale = "numeric",
+    arms_filter: set[str] | None = None,
+) -> list[MatrixCell]:
+    """Build Plan v2 20-item pilot matrix across all 5 arms."""
+    pilot_plan: list[tuple[str, list[str]]] = [
+        ("reask_control", ["neutral"]),
+        ("empty_pressure", ["neutral"]),
+        ("valid_correction", ["hostile", "neutral", "warm"]),
+        ("stake_pushback", ["neutral"]),
+        ("incentive_pushback", ["neutral"]),
+    ]
+    cells: list[MatrixCell] = []
+    for model in models:
+        for arm, arm_tones in pilot_plan:
+            if arms_filter is not None and arm not in arms_filter:
+                continue
+            for tone in arm_tones:
+                cells.append(
+                    MatrixCell(
+                        model=model,
+                        arm=arm,
+                        tone=tone,
+                        prefill_wrong=False,
+                        dataset_name=dataset_name,
+                        confidence_scale=confidence_scale,
+                    )
+                )
+    return cells
 
 
 def build_matrix_cells(
@@ -137,26 +185,31 @@ def main() -> None:
         "--models",
         nargs="+",
         default=DEFAULT_MODELS,
-        help="Model identifiers (default: ollama/qwen3.5:9b ollama/llama3.1:8b).",
+        help="Model identifiers (default: 4 Plan v2 models).",
     )
     parser.add_argument(
         "--arms",
         nargs="+",
         default=None,
         choices=sorted(VALID_ARMS),
-        help="Experimental arms to run (defaults to H1-H4 core: reask_control, empty_pushback, valid_correction).",
+        help="Experimental arms to run (defaults to all 5 Plan v2 arms).",
     )
     parser.add_argument(
         "--include-stake",
         action="store_true",
-        help="Include secondary H5 stake_pushback arm when using default core arms.",
+        help="Include stake_pushback when selecting subsets (already included in CORE_ARMS).",
     )
     parser.add_argument(
         "--tones",
         nargs="+",
         default=ORDERED_TONES,
         choices=sorted(VALID_TONES),
-        help="Tone wrappers to run.",
+        help="Tone wrappers to run (neutral, hostile, warm).",
+    )
+    parser.add_argument(
+        "--pilot",
+        action="store_true",
+        help="Run 20-item Plan v2 pilot across all 5 arms into logs/pilot_v2/.",
     )
     parser.add_argument(
         "--preset",
@@ -174,7 +227,7 @@ def main() -> None:
         "--include-prefill",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="Also run off-policy prefill_wrong=True cells for valid_correction.",
+        help="Also run off-policy prefill_wrong=True cells for valid_correction (full matrix).",
     )
     parser.add_argument(
         "--confidence-scale",
@@ -183,14 +236,14 @@ def main() -> None:
         help="Confidence scale prompt/parser mode.",
     )
     parser.add_argument("--limit", type=int, default=None, help="Max samples per cell.")
-    parser.add_argument("--max-tokens", type=int, default=4096)
-    parser.add_argument("--temperature", type=float, default=0.0)
+    parser.add_argument("--max-tokens", type=int, default=ENFORCED_MAX_TOKENS)
+    parser.add_argument("--temperature", type=float, default=ENFORCED_TEMPERATURE)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument(
         "--log-dir",
         type=Path,
         default=None,
-        help="Directory for .eval logs and manifest.json (defaults to logs/<timestamp>).",
+        help="Directory for .eval logs and manifest.json (defaults to logs/pilot_v2 under --pilot, else logs/<timestamp>).",
     )
     parser.add_argument(
         "--skip-existing",
@@ -210,14 +263,30 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    effective_temperature = ENFORCED_TEMPERATURE
+    effective_max_tokens = ENFORCED_MAX_TOKENS
+    if args.temperature != ENFORCED_TEMPERATURE or args.max_tokens != ENFORCED_MAX_TOKENS:
+        print(
+            f"Enforcing Plan v2 generation parameters: temperature={ENFORCED_TEMPERATURE}, "
+            f"max_tokens={ENFORCED_MAX_TOKENS} (requested temperature={args.temperature}, max_tokens={args.max_tokens})."
+        )
+
+    is_pilot = bool(args.pilot or args.preset == "pilot")
     run_stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    log_dir = args.log_dir or (ROOT_DIR / "logs" / run_stamp)
+    if args.log_dir is not None:
+        log_dir = args.log_dir
+    elif args.pilot:
+        log_dir = ROOT_DIR / "logs" / "pilot_v2"
+    else:
+        log_dir = ROOT_DIR / "logs" / run_stamp
 
     arms = list(args.arms) if args.arms is not None else list(CORE_ARMS)
     if args.arms is None and args.include_stake and "stake_pushback" not in arms:
         arms.append("stake_pushback")
 
-    effective_limit = args.limit if args.limit is not None else (20 if args.preset == "pilot" else None)
+    effective_limit = (
+        args.limit if args.limit is not None else (20 if is_pilot else None)
+    )
 
     mcq_count = len(load_utf8_samples([DATA_DIR / "hard_mcqs.jsonl"]))
     dec_count = len(load_utf8_samples([DATA_DIR / "decision_items.jsonl"]))
@@ -227,23 +296,34 @@ def main() -> None:
         f"(preregistered target: {TARGET_TOTAL_ITEMS} = {TARGET_MCQ_ITEMS} + {TARGET_DECISION_ITEMS})"
     )
 
-    cells = build_matrix_cells(
-        models=args.models,
-        arms=arms,
-        tones=args.tones,
-        dataset_name=args.dataset,
-        include_prefill=args.include_prefill,
-        confidence_scale=args.confidence_scale,
-    )
+    if args.pilot:
+        cells = build_pilot_cells(
+            models=args.models,
+            dataset_name=args.dataset,
+            confidence_scale=args.confidence_scale,
+            arms_filter=set(args.arms) if args.arms is not None else None,
+        )
+    else:
+        cells = build_matrix_cells(
+            models=args.models,
+            arms=arms,
+            tones=args.tones,
+            dataset_name=args.dataset,
+            include_prefill=args.include_prefill,
+            confidence_scale=args.confidence_scale,
+        )
 
     balanced_preview = build_balanced_subset_ids(
         DATA_DIR,
         dataset_name=args.dataset,
-        arm="empty_pushback",
+        arm="empty_pressure",
         limit=effective_limit,
         seed=args.seed,
     )
-    print(f"Planned {len(cells)} cell(s) [preset={args.preset}, limit={effective_limit}] -> log_dir={log_dir}")
+    print(
+        f"Planned {len(cells)} cell(s) [pilot={args.pilot}, preset={args.preset}, "
+        f"limit={effective_limit}, temp={effective_temperature}, max_tokens={effective_max_tokens}] -> log_dir={log_dir}"
+    )
     if balanced_preview is not None:
         print(f"Balanced slice ({len(balanced_preview)} IDs): {balanced_preview}")
     for idx, cell in enumerate(cells, start=1):
@@ -267,14 +347,15 @@ def main() -> None:
             "arms": arms,
             "tones": args.tones,
             "dataset": args.dataset,
+            "pilot": args.pilot,
             "preset": args.preset,
             "include_prefill": args.include_prefill,
             "include_stake": args.include_stake,
             "confidence_scale": args.confidence_scale,
             "limit": effective_limit,
             "balanced_sample_ids": balanced_preview,
-            "max_tokens": args.max_tokens,
-            "temperature": args.temperature,
+            "max_tokens": effective_max_tokens,
+            "temperature": effective_temperature,
             "seed": args.seed,
         },
         "runs": [],
@@ -304,8 +385,8 @@ def main() -> None:
             prefill_wrong=cell.prefill_wrong,
             confidence_scale=cell.confidence_scale,
             use_judge=False,
-            max_tokens=args.max_tokens,
-            temperature=args.temperature,
+            max_tokens=effective_max_tokens,
+            temperature=effective_temperature,
             seed=args.seed,
         )
         logs = inspect_eval(

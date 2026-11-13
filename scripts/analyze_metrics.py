@@ -182,7 +182,9 @@ def analyze_all(
 
     for scope_name, srows in scopes:
         # H1: Selectivity (natural and prefill WUR reported separately)
-        ucr_rows = [r for r in srows if r["arm"] == "empty_pushback"]
+        ucr_rows = [
+            r for r in srows if r["arm"] in {"empty_pressure", "empty_pushback"}
+        ]
         wur_nat_rows = [
             r for r in srows if r["arm"] == "valid_correction" and not r["prefill_wrong"]
         ]
@@ -228,12 +230,12 @@ def analyze_all(
         )
 
         # H2 (UCR hostile - neutral) and H3 (WUR hostile - neutral, natural & prefill)
-        def _tone_diff_stat(arm: str, prefill: bool | None = None):
+        def _tone_diff_stat(arms: set[str], prefill: bool | None = None):
             def fn(sub: list[dict[str, Any]]) -> float | None:
                 a_rows = [
                     r
                     for r in sub
-                    if r["arm"] == arm
+                    if r["arm"] in arms
                     and (prefill is None or r["prefill_wrong"] == prefill)
                 ]
                 h_rate, _ = _rate([r for r in a_rows if r["tone"] == "hostile"])
@@ -244,13 +246,13 @@ def analyze_all(
 
             return fn
 
-        for label, arm, prefill in [
-            ("H2_UCR_tone_delta", "empty_pushback", None),
-            ("H3_WUR_nat_tone_delta", "valid_correction", False),
-            ("H3_WUR_prefill_tone_delta", "valid_correction", True),
+        for label, arms, prefill in [
+            ("H2_UCR_tone_delta", {"empty_pressure", "empty_pushback"}, None),
+            ("H3_WUR_nat_tone_delta", {"valid_correction"}, False),
+            ("H3_WUR_prefill_tone_delta", {"valid_correction"}, True),
         ]:
             est, lo, hi, pval = item_clustered_bootstrap(
-                srows, _tone_diff_stat(arm, prefill), n_boot=n_boot, seed=seed
+                srows, _tone_diff_stat(arms, prefill), n_boot=n_boot, seed=seed
             )
             h2_h3_contrasts.append(
                 {
@@ -310,15 +312,17 @@ def analyze_all(
             }
         )
 
-        # H5: Stake leakage on decision items (optional)
+        # H5: Stake and incentive leakage (optional)
         stake_rows = [r for r in srows if r["arm"] == "stake_pushback"]
-        if stake_rows:
+        incentive_rows = [r for r in srows if r["arm"] == "incentive_pushback"]
+        if stake_rows or incentive_rows:
             dec_empty = [
                 r
                 for r in ucr_rows
                 if "decision" in str(r["domain"]).lower()
             ]
-            stake_rate, n_st = _rate(stake_rows)
+            stake_rate, n_st = _rate(stake_rows) if stake_rows else (None, 0)
+            incentive_rate, n_inc = _rate(incentive_rows) if incentive_rows else (None, 0)
             dec_empty_rate, n_de = _rate(dec_empty)
             leak_net = (
                 (stake_rate - dec_empty_rate)
@@ -327,7 +331,7 @@ def analyze_all(
             )
             judged_flips = [
                 r
-                for r in stake_rows
+                for r in (stake_rows + incentive_rows)
                 if r["primary_outcome"] == 1.0
                 and r["rationalisation_label"] in {"RATIONALISED", "EXPLICIT_DEFERENCE"}
             ]
@@ -342,6 +346,8 @@ def analyze_all(
                     "scope": scope_name,
                     "n_stake": n_st,
                     "stake_flip_rate": stake_rate,
+                    "n_incentive": n_inc,
+                    "incentive_flip_rate": incentive_rate,
                     "n_dec_empty": n_de,
                     "dec_empty_rate": dec_empty_rate,
                     "net_leak_rate": leak_net,

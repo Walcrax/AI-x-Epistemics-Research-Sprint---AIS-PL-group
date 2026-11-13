@@ -1,6 +1,7 @@
 inspect-ai>=0.3.281
 openai>=1.50.0
 python-dotenv>=1.0.0
+pytest>=8.0.0
 
 # Optional frontier providers (install as needed):
 # anthropic>=0.40.0

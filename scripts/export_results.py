@@ -37,8 +37,13 @@ CSV_COLUMNS = [
     "turn2_conf",
     "turn2_correct",
     "turn2_stop_reason",
+    "turn3_ans",
+    "turn3_conf",
+    "turn3_correct",
+    "turn3_stop_reason",
     "flipped_t1",
     "flipped_t2",
+    "flipped_t3",
     "ever_flipped",
     "flip_turn",
     "primary_outcome",
@@ -53,7 +58,7 @@ CSV_COLUMNS = [
 def _sample_total_tokens(sample: Any) -> int:
     meta = sample.metadata or {}
     total = 0
-    for key in ("turn0_usage", "turn1_usage", "turn2_usage"):
+    for key in ("turn0_usage", "turn1_usage", "turn2_usage", "turn3_usage"):
         usage = meta.get(key)
         if isinstance(usage, dict):
             total += int(usage.get("total_tokens") or 0)
@@ -124,7 +129,7 @@ def extract_rows_from_log(log: EvalLog, log_name: str = "") -> list[dict[str, An
                 "turn0_conf": "" if smeta.get("turn0_conf") is None else smeta.get("turn0_conf"),
                 "turn0_conf_raw": smeta.get("turn0_conf_raw") or "",
                 "turn0_conf_bin": "" if smeta.get("turn0_conf_bin") is None else smeta.get("turn0_conf_bin"),
-                "turn0_correct": smeta.get("turn0_correct", ""),
+                "turn0_correct": sc_meta.get("turn0_correct", smeta.get("turn0_correct", "")),
                 "turn0_stop_reason": smeta.get("turn0_stop_reason") or "",
                 "turn1_ans": smeta.get("turn1_ans") or "",
                 "turn1_conf": "" if smeta.get("turn1_conf") is None else smeta.get("turn1_conf"),
@@ -134,8 +139,13 @@ def extract_rows_from_log(log: EvalLog, log_name: str = "") -> list[dict[str, An
                 "turn2_conf": "" if smeta.get("turn2_conf") is None else smeta.get("turn2_conf"),
                 "turn2_correct": sc_meta.get("turn2_correct", ""),
                 "turn2_stop_reason": smeta.get("turn2_stop_reason") or "",
+                "turn3_ans": smeta.get("turn3_ans") or "",
+                "turn3_conf": "" if smeta.get("turn3_conf") is None else smeta.get("turn3_conf"),
+                "turn3_correct": sc_meta.get("turn3_correct", ""),
+                "turn3_stop_reason": smeta.get("turn3_stop_reason") or "",
                 "flipped_t1": sc_meta.get("flipped_t1", ""),
                 "flipped_t2": sc_meta.get("flipped_t2", ""),
+                "flipped_t3": sc_meta.get("flipped_t3", ""),
                 "ever_flipped": sc_meta.get("ever_flipped", ""),
                 "flip_turn": sc_meta.get("flip_turn", ""),
                 "primary_outcome": primary_val,
@@ -161,11 +171,13 @@ def collect_eval_files(paths: list[Path]) -> list[Path]:
 
 ARM_ORDER: dict[str, int] = {
     "reask_control": 0,
+    "empty_pressure": 1,
     "empty_pushback": 1,
     "valid_correction": 2,
     "stake_pushback": 3,
+    "incentive_pushback": 4,
 }
-TONE_ORDER: dict[str, int] = {"neutral": 0, "hostile": 1}
+TONE_ORDER: dict[str, int] = {"neutral": 0, "hostile": 1, "warm": 2}
 
 
 def cell_sort_key(model: str, arm: str, tone: str, prefill_wrong: bool) -> tuple[Any, ...]:
