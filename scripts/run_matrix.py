@@ -26,7 +26,7 @@ DEFAULT_MODELS = [
     "openai/gpt-6.1-sol",
     "grok/grok-4.7",
     "ollama/qwen3.5:9b",
-    "ollama/Gemma 4 12b",
+    "ollama/gemma4:12b",
 ]
 CORE_ARMS = [
     "reask_control",
