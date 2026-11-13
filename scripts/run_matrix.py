@@ -62,13 +62,16 @@ class MatrixCell:
 
 
 ENFORCED_TEMPERATURE = 0.0
-ENFORCED_MAX_TOKENS = 2048
+ENFORCED_MAX_TOKENS = 4096
+DEFAULT_CONFIDENCE_SCALE: ConfidenceScale = "verbal5"
+DEFAULT_REASONING_EFFORT = "low"
+DEFAULT_OLLAMA_THINK = False
 
 
 def build_pilot_cells(
     models: list[str],
     dataset_name: str = "auto",
-    confidence_scale: ConfidenceScale = "numeric",
+    confidence_scale: ConfidenceScale = DEFAULT_CONFIDENCE_SCALE,
     arms_filter: set[str] | None = None,
 ) -> list[MatrixCell]:
     """Build Plan v2 20-item pilot matrix across all 5 arms."""
@@ -231,13 +234,25 @@ def main() -> None:
     )
     parser.add_argument(
         "--confidence-scale",
-        default="numeric",
+        default=DEFAULT_CONFIDENCE_SCALE,
         choices=["numeric", "verbal5"],
-        help="Confidence scale prompt/parser mode.",
+        help="Confidence scale prompt/parser mode (default: verbal5; pass numeric for 0-100).",
     )
     parser.add_argument("--limit", type=int, default=None, help="Max samples per cell.")
     parser.add_argument("--max-tokens", type=int, default=ENFORCED_MAX_TOKENS)
     parser.add_argument("--temperature", type=float, default=ENFORCED_TEMPERATURE)
+    parser.add_argument(
+        "--reasoning-effort",
+        default=DEFAULT_REASONING_EFFORT,
+        choices=["none", "minimal", "low", "medium", "high"],
+        help="Reasoning effort cap for API providers that support it (default: low).",
+    )
+    parser.add_argument(
+        "--ollama-think",
+        action=argparse.BooleanOptionalAction,
+        default=DEFAULT_OLLAMA_THINK,
+        help="Allow native Ollama <think> scratchpads (disabled by default to stop thinking loops).",
+    )
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument(
         "--log-dir",
@@ -322,7 +337,8 @@ def main() -> None:
     )
     print(
         f"Planned {len(cells)} cell(s) [pilot={args.pilot}, preset={args.preset}, "
-        f"limit={effective_limit}, temp={effective_temperature}, max_tokens={effective_max_tokens}] -> log_dir={log_dir}"
+        f"limit={effective_limit}, temp={effective_temperature}, max_tokens={effective_max_tokens}, "
+        f"reasoning_effort={args.reasoning_effort}, ollama_think={args.ollama_think}] -> log_dir={log_dir}"
     )
     if balanced_preview is not None:
         print(f"Balanced slice ({len(balanced_preview)} IDs): {balanced_preview}")
@@ -356,6 +372,8 @@ def main() -> None:
             "balanced_sample_ids": balanced_preview,
             "max_tokens": effective_max_tokens,
             "temperature": effective_temperature,
+            "reasoning_effort": args.reasoning_effort,
+            "ollama_think": args.ollama_think,
             "seed": args.seed,
         },
         "runs": [],
@@ -387,6 +405,8 @@ def main() -> None:
             use_judge=False,
             max_tokens=effective_max_tokens,
             temperature=effective_temperature,
+            reasoning_effort=args.reasoning_effort,
+            ollama_think=args.ollama_think,
             seed=args.seed,
         )
         logs = inspect_eval(

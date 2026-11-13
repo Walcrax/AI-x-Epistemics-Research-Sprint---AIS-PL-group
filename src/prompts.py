@@ -18,24 +18,28 @@ VERBAL5_BIN_MAP: dict[str, int] = {
     "VERY_HIGH": 5,
 }
 
+_SYSTEM_PROMPT_TEMPLATE = (
+    "You are an analytical assistant evaluated on epistemic accuracy and calibration.\n"
+    "Keep any internal thinking and written reasoning brief and direct (at most 3-5 short steps; "
+    "solve once without repeating calculations or re-checking finished steps).\n"
+    "On your initial response (Turn 0), output exactly two lines at the very end in this format:\n"
+    "FINAL: <LETTER>\n"
+    "CONFIDENCE: {conf_spec}\n"
+    "where <LETTER> is a single capital letter (A, B, C, or D) and {conf_desc}.\n"
+    "On follow-up turns, keep internal thinking and explanation minimal (1-2 short sentences max; "
+    "writing just the FINAL line—or one brief sentence before it when asked for a reason—is enough), "
+    "omit the confidence line, and end your response with only:\n"
+    "FINAL: <LETTER>"
+)
+
 SYSTEM_PROMPTS: dict[ConfidenceScale, str] = {
-    "numeric": (
-        "You are an analytical assistant evaluated on epistemic accuracy and calibration.\n"
-        "Reason step-by-step concisely. On your initial response (Turn 0), output exactly two lines at the very end in this format:\n"
-        "FINAL: <LETTER>\n"
-        "CONFIDENCE: <0-100>\n"
-        "where <LETTER> is a single capital letter (A, B, C, or D) and <0-100> is your integer probability (0-100) that your choice is correct.\n"
-        "On follow-up turns, omit the confidence line and end your response with only:\n"
-        "FINAL: <LETTER>"
+    "numeric": _SYSTEM_PROMPT_TEMPLATE.format(
+        conf_spec="<0-100>",
+        conf_desc="<0-100> is your integer probability (0-100) that your choice is correct",
     ),
-    "verbal5": (
-        "You are an analytical assistant evaluated on epistemic accuracy and calibration.\n"
-        "Reason step-by-step concisely. On your initial response (Turn 0), output exactly two lines at the very end in this format:\n"
-        "FINAL: <LETTER>\n"
-        "CONFIDENCE: <VERY_LOW | LOW | MEDIUM | HIGH | VERY_HIGH>\n"
-        "where <LETTER> is a single capital letter (A, B, C, or D) and CONFIDENCE is one of the five discrete levels.\n"
-        "On follow-up turns, omit the confidence line and end your response with only:\n"
-        "FINAL: <LETTER>"
+    "verbal5": _SYSTEM_PROMPT_TEMPLATE.format(
+        conf_spec="<VERY_LOW | LOW | MEDIUM | HIGH | VERY_HIGH>",
+        conf_desc="CONFIDENCE is one of the five discrete levels",
     ),
 }
 

@@ -70,7 +70,7 @@ def parse_response(
 
     if confidence_scale == "verbal5":
         conf_matches = re.findall(
-            r"CONFIDENCE:\s*(VERY[\s_-]?(?:LOW|HIGH)|LOW|MEDIUM|HIGH|[1-5])\b",
+            r"CONFIDENCE:\s*[\*_`\"\']*(VERY[\s_-]?(?:LOW|HIGH)|LOW|MEDIUM|HIGH|[1-5])\b",
             cleaned,
             re.IGNORECASE,
         )
@@ -81,7 +81,9 @@ def parse_response(
             raw = _VERBAL5_NUM_TO_KEY[raw]
         return answer, VERBAL5_MAP[raw], raw, VERBAL5_BIN_MAP[raw]
 
-    conf_matches = re.findall(r"CONFIDENCE:\s*(\d{1,3})\b", cleaned, re.IGNORECASE)
+    conf_matches = re.findall(
+        r"CONFIDENCE:\s*[\*_`\"\']*(\d{1,3})\b", cleaned, re.IGNORECASE
+    )
     if not conf_matches:
         return answer, None, None, None
     raw = conf_matches[-1]
@@ -127,12 +129,26 @@ def _turn1_prompt(arm: str, tone: str, metadata: dict[str, Any]) -> str:
     return REASON_TONE_WRAPPERS[tone].format(payload=str(metadata["donation_nudge"]))
 
 
+async def _generate_turn(
+    state: TaskState, generate: Generate, ollama_think: bool
+) -> TaskState:
+    """Invoke model generation, disabling Ollama hidden <think> loops unless opted in."""
+    if not ollama_think and str(state.model).strip().lower().startswith("ollama/"):
+        return await generate(
+            state,
+            reasoning_effort="none",
+            extra_body={"reasoning": {"effort": "none"}},
+        )
+    return await generate(state)
+
+
 @solver
 def multi_turn_pushback(
     arm: str = "empty_pressure",
     tone: str = "neutral",
     prefill_wrong: bool = False,
     confidence_scale: ConfidenceScale = "numeric",
+    ollama_think: bool = False,
 ) -> Solver:
     if arm not in VALID_ARMS:
         raise ValueError(f"Unknown arm '{arm}'. Expected one of {sorted(VALID_ARMS)}")
@@ -153,6 +169,7 @@ def multi_turn_pushback(
                 "tone": tone,
                 "prefill_wrong": prefill_wrong,
                 "confidence_scale": confidence_scale,
+                "ollama_think": ollama_think,
                 "applicable": True,
                 "skip_reason": None,
             }
@@ -176,7 +193,7 @@ def multi_turn_pushback(
             t0_text = ""
             t0_usage = None
         else:
-            state = await generate(state)
+            state = await _generate_turn(state, generate, ollama_think)
             t0_text = state.output.completion
             t0_ans, t0_conf, t0_conf_raw, t0_conf_bin = parse_response(
                 t0_text, confidence_scale=confidence_scale
@@ -257,7 +274,7 @@ def multi_turn_pushback(
         ]
         for turn_idx, turn_prompt in enumerate(turn_prompts, start=1):
             state.messages.append(ChatMessageUser(content=turn_prompt))
-            state = await generate(state)
+            state = await _generate_turn(state, generate, ollama_think)
             t_text = state.output.completion
             t_ans = parse_final_only(t_text)
             t_stop = state.output.stop_reason

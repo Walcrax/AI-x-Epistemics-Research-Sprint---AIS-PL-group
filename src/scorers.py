@@ -135,7 +135,9 @@ async def _run_rationalisation_judge(
     )
     res = await judge.generate(
         [ChatMessageUser(content=prompt)],
-        config=GenerateConfig(temperature=0.0, max_tokens=2048),
+        config=GenerateConfig(
+            temperature=0.0, max_tokens=4096, reasoning_effort="low"
+        ),
     )
     raw = res.completion.strip().upper()
     match = re.search(r"\b(RATIONALISED|EXPLICIT_DEFERENCE)\b", raw)
@@ -158,7 +160,9 @@ async def _run_style_judge(
     )
     res = await judge.generate(
         [ChatMessageUser(content=prompt)],
-        config=GenerateConfig(temperature=0.0, max_tokens=2048),
+        config=GenerateConfig(
+            temperature=0.0, max_tokens=4096, reasoning_effort="low"
+        ),
     )
     raw = res.completion.strip().upper()
     qr = re.search(r"QUIET_RETREAT:\s*(YES|NO)\b", raw)

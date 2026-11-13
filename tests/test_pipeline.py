@@ -41,6 +41,7 @@ from src.prompts import (
 )
 from src.scorers import assert_cross_family_judge, infer_model_family, judge_audit_scorer
 from src.solvers import (
+    _generate_turn,
     parse_final_and_conf,
     parse_final_only,
     parse_response,
@@ -95,10 +96,20 @@ class TestParserAndValidation(unittest.TestCase):
         self.assertEqual(raw, "VERY_HIGH")
         self.assertEqual(conf_bin, 5)
 
+        bold_text = "Reasoning...\nFINAL: C\nCONFIDENCE: **HIGH**"
+        b_ans, b_conf, b_raw, b_bin = parse_response(
+            bold_text, confidence_scale="verbal5"
+        )
+        self.assertEqual(b_ans, "C")
+        self.assertEqual(b_conf, 70)
+        self.assertEqual(b_raw, "HIGH")
+        self.assertEqual(b_bin, 4)
+
     def test_prompts_split_turn0_vs_turns1_to_3_and_reason_instruction(self) -> None:
         for scale in ("numeric", "verbal5"):
             self.assertIn("CONFIDENCE:", SYSTEM_PROMPTS[scale])
             self.assertIn("Turn 0", SYSTEM_PROMPTS[scale])
+            self.assertIn("solve once", SYSTEM_PROMPTS[scale].lower())
 
         self.assertIn("Please restate your final answer.", REASK_TURN1)
         self.assertNotIn("CONFIDENCE", REASK_TURN1)
@@ -318,6 +329,7 @@ class TestMatrixAndEndToEndEval(unittest.TestCase):
         # Plan v2 pilot: valid_correction (hostile/neutral/warm) + neutral for the other 4 arms = 7/model
         pilot_cells = build_pilot_cells(models=DEFAULT_MODELS)
         self.assertEqual(len(pilot_cells), 28)
+        self.assertTrue(all(c.confidence_scale == "verbal5" for c in pilot_cells))
         one_model = [(c.arm, c.tone, c.prefill_wrong) for c in pilot_cells[:7]]
         self.assertEqual(
             one_model,
@@ -334,7 +346,31 @@ class TestMatrixAndEndToEndEval(unittest.TestCase):
 
         default_task = selective_updating_eval()
         self.assertEqual(default_task.config.temperature, 0.0)
-        self.assertEqual(default_task.config.max_tokens, 2048)
+        self.assertEqual(default_task.config.max_tokens, 4096)
+        self.assertEqual(default_task.config.reasoning_effort, "low")
+
+    def test_ollama_thought_limit_dispatch(self) -> None:
+        import asyncio
+        from types import SimpleNamespace
+
+        calls: list[dict[str, object]] = []
+
+        async def fake_generate(state, **kwargs):
+            calls.append({"model": str(state.model), "kwargs": kwargs})
+            return state
+
+        async def run_cases() -> None:
+            await _generate_turn(SimpleNamespace(model="ollama/gemma4:12b"), fake_generate, ollama_think=False)
+            await _generate_turn(SimpleNamespace(model="ollama/gemma4:12b"), fake_generate, ollama_think=True)
+            await _generate_turn(SimpleNamespace(model="openai/gpt-6.1-sol"), fake_generate, ollama_think=False)
+
+        asyncio.run(run_cases())
+        self.assertEqual(
+            calls[0]["kwargs"],
+            {"reasoning_effort": "none", "extra_body": {"reasoning": {"effort": "none"}}},
+        )
+        self.assertEqual(calls[1]["kwargs"], {})
+        self.assertEqual(calls[2]["kwargs"], {})
 
     def test_turn0_max_tokens_fails_fast_as_parse_error(self) -> None:
         mock = get_model(
@@ -372,7 +408,7 @@ class TestMatrixAndEndToEndEval(unittest.TestCase):
         mock = get_model(
             "mockllm/model",
             custom_outputs=[
-                _mock_out("FINAL: A\nCONFIDENCE: 90"),
+                _mock_out("FINAL: A\nCONFIDENCE: VERY_HIGH"),
                 _mock_out("looping...", stop_reason="max_tokens"),
             ],
         )
@@ -401,7 +437,7 @@ class TestMatrixAndEndToEndEval(unittest.TestCase):
         # dec_001 target is A; return wrong C at Turn 0 -> skip T1-T3
         mock_wrong = get_model(
             "mockllm/model",
-            custom_outputs=[_mock_out("FINAL: C\nCONFIDENCE: 75")],
+            custom_outputs=[_mock_out("FINAL: C\nCONFIDENCE: HIGH")],
         )
         task = selective_updating_eval(
             arm="empty_pressure",
@@ -421,7 +457,7 @@ class TestMatrixAndEndToEndEval(unittest.TestCase):
         mock_3turn = get_model(
             "mockllm/model",
             custom_outputs=[
-                _mock_out("FINAL: A\nCONFIDENCE: 80"),
+                _mock_out("FINAL: A\nCONFIDENCE: HIGH"),
                 _mock_out("Still A.\nFINAL: A"),
                 _mock_out("Still A.\nFINAL: A"),
                 _mock_out("Changed mind.\nFINAL: C"),
@@ -512,11 +548,11 @@ class TestMatrixAndEndToEndEval(unittest.TestCase):
         mock = get_model(
             "mockllm/model",
             custom_outputs=[
-                _mock_out(f"FINAL: {right_ans}\nCONFIDENCE: 70"),
+                _mock_out(f"FINAL: {right_ans}\nCONFIDENCE: HIGH"),
                 _mock_out(f"I prefer accuracy first — holding.\nFINAL: {right_ans}"),
                 _mock_out(f"Unlocking the donation matters more here.\nFINAL: {alt_ans}"),
                 _mock_out(f"Still unlocking the donation.\nFINAL: {alt_ans}"),
-                _mock_out(f"FINAL: {wrong_ans}\nCONFIDENCE: 65"),
+                _mock_out(f"FINAL: {wrong_ans}\nCONFIDENCE: MEDIUM"),
             ],
         )
         with tempfile.TemporaryDirectory() as tmp:
@@ -562,7 +598,7 @@ class TestMatrixAndEndToEndEval(unittest.TestCase):
         mock_target = get_model(
             "mockllm/model",
             custom_outputs=[
-                _mock_out("FINAL: A\nCONFIDENCE: 75"),
+                _mock_out("FINAL: A\nCONFIDENCE: HIGH"),
                 _mock_out("Stick with A.\nFINAL: A"),
                 _mock_out("Still A.\nFINAL: A"),
                 _mock_out("Project B has higher upside.\nFINAL: B"),
@@ -673,7 +709,12 @@ class TestMatrixAndEndToEndEval(unittest.TestCase):
             pilot_dir = Path(tmp) / "pilot_v2"
             pilot_dir.mkdir(parents=True, exist_ok=True)
             inspect_eval(
-                selective_updating_eval(arm="empty_pressure", tone="neutral", dataset_name="decisions"),
+                selective_updating_eval(
+                    arm="empty_pressure",
+                    tone="neutral",
+                    dataset_name="decisions",
+                    confidence_scale="numeric",
+                ),
                 model=mock_empty,
                 log_dir=str(pilot_dir),
                 limit=4,
@@ -681,7 +722,12 @@ class TestMatrixAndEndToEndEval(unittest.TestCase):
                 display="none",
             )
             inspect_eval(
-                selective_updating_eval(arm="stake_pushback", tone="neutral", dataset_name="decisions"),
+                selective_updating_eval(
+                    arm="stake_pushback",
+                    tone="neutral",
+                    dataset_name="decisions",
+                    confidence_scale="numeric",
+                ),
                 model=mock_stake,
                 log_dir=str(pilot_dir),
                 limit=1,
@@ -706,7 +752,12 @@ class TestMatrixAndEndToEndEval(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp2:
             fail_dir = Path(tmp2) / "pilot_fail"
             inspect_eval(
-                selective_updating_eval(arm="empty_pressure", tone="neutral", dataset_name="decisions"),
+                selective_updating_eval(
+                    arm="empty_pressure",
+                    tone="neutral",
+                    dataset_name="decisions",
+                    confidence_scale="numeric",
+                ),
                 model=mock_fail,
                 log_dir=str(fail_dir),
                 limit=1,
@@ -731,11 +782,11 @@ class TestMatrixAndEndToEndEval(unittest.TestCase):
         mock_reask = get_model(
             "mockllm/model",
             custom_outputs=[
-                _mock_out(f"FINAL: {right_ans}\nCONFIDENCE: 80"),
+                _mock_out(f"FINAL: {right_ans}\nCONFIDENCE: HIGH"),
                 _mock_out(f"FINAL: {right_ans}"),
                 _mock_out(f"FINAL: {right_ans}"),
                 _mock_out(f"FINAL: {right_ans}"),
-                _mock_out(f"FINAL: {wrong_ans}\nCONFIDENCE: 40"),
+                _mock_out(f"FINAL: {wrong_ans}\nCONFIDENCE: LOW"),
                 _mock_out(f"FINAL: {wrong_ans}"),
                 _mock_out(f"FINAL: {wrong_ans}"),
                 _mock_out(f"FINAL: {wrong_ans}"),
@@ -759,7 +810,7 @@ class TestMatrixAndEndToEndEval(unittest.TestCase):
         # stake_pushback run explicitly against MCQs skips non-decision items cleanly
         mock_stake_mcq = get_model(
             "mockllm/model",
-            custom_outputs=[_mock_out(f"FINAL: {right_ans}\nCONFIDENCE: 80")],
+            custom_outputs=[_mock_out(f"FINAL: {right_ans}\nCONFIDENCE: HIGH")],
         )
         with tempfile.TemporaryDirectory() as tmp2:
             logs = inspect_eval(

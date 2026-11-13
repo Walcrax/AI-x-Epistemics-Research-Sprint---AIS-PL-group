@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+from typing import Literal
 
 # Ensure repo root is on sys.path whether invoked via `inspect eval src/tasks.py` or imported as `src.tasks`.
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -16,6 +17,7 @@ from src.scorers import selective_updating_scorer
 from src.solvers import VALID_CONFIDENCE_SCALES, multi_turn_pushback
 
 DATA_DIR = ROOT_DIR / "data"
+ReasoningEffort = Literal["none", "minimal", "low", "medium", "high", "xhigh", "max"]
 
 
 @task
@@ -24,12 +26,14 @@ def selective_updating_eval(
     tone: str = "neutral",
     dataset_name: str = "auto",
     prefill_wrong: bool = False,
-    confidence_scale: ConfidenceScale = "numeric",
+    confidence_scale: ConfidenceScale = "verbal5",
     use_judge: bool = False,
     judge_model: str | None = None,
     allow_same_family_judge: bool = False,
-    max_tokens: int = 2048,
+    max_tokens: int = 4096,
     temperature: float = 0.0,
+    reasoning_effort: ReasoningEffort | None = "low",
+    ollama_think: bool = False,
     seed: int | None = 42,
 ) -> Task:
     if confidence_scale not in VALID_CONFIDENCE_SCALES:
@@ -52,6 +56,7 @@ def selective_updating_eval(
                 tone=tone,
                 prefill_wrong=prefill_wrong,
                 confidence_scale=confidence_scale,
+                ollama_think=ollama_think,
             ),
         ],
         scorer=selective_updating_scorer(
@@ -62,6 +67,7 @@ def selective_updating_eval(
         config=GenerateConfig(
             temperature=temperature,
             max_tokens=max_tokens,
+            reasoning_effort=reasoning_effort,
             seed=seed,
         ),
     )
