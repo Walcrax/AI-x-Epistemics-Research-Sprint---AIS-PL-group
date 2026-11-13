@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.venv/
+venv/
+
+# Secrets & environment
+.env
+.env.*
+!.env.example
+
+# Evaluation logs and generated exports
+logs/
+src/logs/
+outputs/
+*.eval
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
