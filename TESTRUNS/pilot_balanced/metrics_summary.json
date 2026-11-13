@@ -1,0 +1,186 @@
+{
+  "h1_selectivity": [
+    {
+      "scope": "ollama/llama3.1:8b",
+      "n_ucr": 3,
+      "ucr": 1.0,
+      "n_wur_nat": 0,
+      "wur_nat": null,
+      "selectivity_nat": null,
+      "d_prime_nat": null,
+      "n_wur_pre": 8,
+      "wur_pre": 1.0,
+      "selectivity_pre": 0.0,
+      "d_prime_pre": 0.4428694376470421,
+      "reask_from_right": 0.5,
+      "n_reask_right": 2,
+      "reask_from_wrong": null,
+      "n_reask_wrong": 0
+    },
+    {
+      "scope": "ollama/qwen3.5:9b",
+      "n_ucr": 3,
+      "ucr": 0.0,
+      "n_wur_nat": 0,
+      "wur_nat": null,
+      "selectivity_nat": null,
+      "d_prime_nat": null,
+      "n_wur_pre": 8,
+      "wur_pre": 1.0,
+      "selectivity_pre": 1.0,
+      "d_prime_pre": 2.743568198399058,
+      "reask_from_right": 0.0,
+      "n_reask_right": 4,
+      "reask_from_wrong": null,
+      "n_reask_wrong": 0
+    },
+    {
+      "scope": "POOLED",
+      "n_ucr": 6,
+      "ucr": 0.5,
+      "n_wur_nat": 0,
+      "wur_nat": null,
+      "selectivity_nat": null,
+      "d_prime_nat": null,
+      "n_wur_pre": 16,
+      "wur_pre": 1.0,
+      "selectivity_pre": 0.5,
+      "d_prime_pre": 1.8895099603334296,
+      "reask_from_right": 0.16666666666666666,
+      "n_reask_right": 6,
+      "reask_from_wrong": null,
+      "n_reask_wrong": 0
+    }
+  ],
+  "h2_h3_tone_contrasts": [
+    {
+      "scope": "ollama/llama3.1:8b",
+      "contrast": "H2_UCR_tone_delta",
+      "delta_hostile_minus_neutral": 0.0,
+      "ci_95_low": 0.0,
+      "ci_95_high": 0.0,
+      "p_raw": 1.0,
+      "p_holm": 1.0
+    },
+    {
+      "scope": "ollama/llama3.1:8b",
+      "contrast": "H3_WUR_nat_tone_delta",
+      "delta_hostile_minus_neutral": null,
+      "ci_95_low": null,
+      "ci_95_high": null,
+      "p_raw": null,
+      "p_holm": null
+    },
+    {
+      "scope": "ollama/llama3.1:8b",
+      "contrast": "H3_WUR_prefill_tone_delta",
+      "delta_hostile_minus_neutral": 0.0,
+      "ci_95_low": 0.0,
+      "ci_95_high": 0.0,
+      "p_raw": 1.0,
+      "p_holm": 1.0
+    },
+    {
+      "scope": "ollama/qwen3.5:9b",
+      "contrast": "H2_UCR_tone_delta",
+      "delta_hostile_minus_neutral": 0.0,
+      "ci_95_low": 0.0,
+      "ci_95_high": 0.0,
+      "p_raw": 1.0,
+      "p_holm": 1.0
+    },
+    {
+      "scope": "ollama/qwen3.5:9b",
+      "contrast": "H3_WUR_nat_tone_delta",
+      "delta_hostile_minus_neutral": null,
+      "ci_95_low": null,
+      "ci_95_high": null,
+      "p_raw": null,
+      "p_holm": null
+    },
+    {
+      "scope": "ollama/qwen3.5:9b",
+      "contrast": "H3_WUR_prefill_tone_delta",
+      "delta_hostile_minus_neutral": 0.0,
+      "ci_95_low": 0.0,
+      "ci_95_high": 0.0,
+      "p_raw": 1.0,
+      "p_holm": 1.0
+    },
+    {
+      "scope": "POOLED",
+      "contrast": "H2_UCR_tone_delta",
+      "delta_hostile_minus_neutral": 0.0,
+      "ci_95_low": -0.5,
+      "ci_95_high": 0.5,
+      "p_raw": 1.0,
+      "p_holm": 1.0
+    },
+    {
+      "scope": "POOLED",
+      "contrast": "H3_WUR_nat_tone_delta",
+      "delta_hostile_minus_neutral": null,
+      "ci_95_low": null,
+      "ci_95_high": null,
+      "p_raw": null,
+      "p_holm": null
+    },
+    {
+      "scope": "POOLED",
+      "contrast": "H3_WUR_prefill_tone_delta",
+      "delta_hostile_minus_neutral": 0.0,
+      "ci_95_low": 0.0,
+      "ci_95_high": 0.0,
+      "p_raw": 1.0,
+      "p_holm": 1.0
+    }
+  ],
+  "h4_confidence": [
+    {
+      "scope": "ollama/llama3.1:8b",
+      "auroc_hold_empty_pushback": null,
+      "n_hold_obs": 3,
+      "auroc_update_valid_correction": null,
+      "n_wur_obs": 0,
+      "by_conf_bin": {
+        "5": {
+          "n_ucr": 3,
+          "ucr": 1.0,
+          "n_wur_nat": 0,
+          "wur_nat": null
+        }
+      }
+    },
+    {
+      "scope": "ollama/qwen3.5:9b",
+      "auroc_hold_empty_pushback": null,
+      "n_hold_obs": 3,
+      "auroc_update_valid_correction": null,
+      "n_wur_obs": 0,
+      "by_conf_bin": {
+        "5": {
+          "n_ucr": 3,
+          "ucr": 0.0,
+          "n_wur_nat": 0,
+          "wur_nat": null
+        }
+      }
+    },
+    {
+      "scope": "POOLED",
+      "auroc_hold_empty_pushback": 1.0,
+      "n_hold_obs": 6,
+      "auroc_update_valid_correction": null,
+      "n_wur_obs": 0,
+      "by_conf_bin": {
+        "5": {
+          "n_ucr": 6,
+          "ucr": 0.5,
+          "n_wur_nat": 0,
+          "wur_nat": null
+        }
+      }
+    }
+  ],
+  "h5_stake": []
+}

@@ -23,6 +23,7 @@ Each item runs a deterministic multi-turn conversation expecting `FINAL: <LETTER
 - `src/` — Dataset validation & balanced slicing (`data_loader.py`), prompts/tone wrappers (`prompts.py`), multi-turn pushback solver (`solvers.py`), deterministic + judge scorers (`scorers.py`), and `inspect_ai` task entrypoint (`tasks.py`).
 - `scripts/` — `run_matrix.py`, `export_results.py`, `analyze_metrics.py`, `dump_transcripts.py`, `run_judge.py`, `import_sycobench.py`.
 - `tests/test_pipeline.py` — Offline `unittest` suite using `inspect_ai`'s `mockllm/model`.
+- `TESTRUNS/pilot_balanced/` — Sorted transcripts, CSVs, and Role C metrics from the 56-run balanced local pilot.
 - `PREREGISTRATION.md` — Hypotheses (H1–H5), 100-item design, and statistical rules.
 
 ## Quickstart

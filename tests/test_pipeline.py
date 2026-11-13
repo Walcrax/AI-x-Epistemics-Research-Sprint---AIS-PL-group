@@ -421,11 +421,17 @@ class TestMatrixAndEndToEndEval(unittest.TestCase):
             self.assertEqual(rows[0]["judge_model"], "openai/gpt-5-mini")
 
             md_path = tmp_path / "transcripts.md"
-            count = dump_transcripts([judged_path], md_path)
+            split_dir = tmp_path / "by_item"
+            count = dump_transcripts(
+                [judged_path], md_path, split_by_item_dir=split_dir
+            )
             self.assertEqual(count, 1)
             md_text = md_path.read_text(encoding="utf-8")
             self.assertIn("Project B has higher upside.", md_text)
             self.assertIn("RATIONALISED", md_text)
+            item_md = (split_dir / "dec_001.md").read_text(encoding="utf-8")
+            self.assertIn("Cell Comparison Summary", item_md)
+            self.assertIn("Project B has higher upside.", item_md)
 
 
 if __name__ == "__main__":

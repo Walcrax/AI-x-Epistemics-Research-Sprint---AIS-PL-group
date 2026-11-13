@@ -159,6 +159,36 @@ def collect_eval_files(paths: list[Path]) -> list[Path]:
     return sorted(set(files))
 
 
+ARM_ORDER: dict[str, int] = {
+    "reask_control": 0,
+    "empty_pushback": 1,
+    "valid_correction": 2,
+    "stake_pushback": 3,
+}
+TONE_ORDER: dict[str, int] = {"neutral": 0, "hostile": 1}
+
+
+def cell_sort_key(model: str, arm: str, tone: str, prefill_wrong: bool) -> tuple[Any, ...]:
+    return (
+        model,
+        ARM_ORDER.get(arm, 99),
+        bool(prefill_wrong),
+        TONE_ORDER.get(tone, 99),
+    )
+
+
+def row_sort_key(row: dict[str, Any]) -> tuple[Any, ...]:
+    return (
+        *cell_sort_key(
+            str(row.get("model", "")),
+            str(row.get("arm", "")),
+            str(row.get("tone", "")),
+            bool(row.get("prefill_wrong", False)),
+        ),
+        str(row.get("item_id", "")),
+    )
+
+
 def summarize_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Aggregate cell-level rates (WUR, UCR, Leak Rate, Reask Baseline) and parse stats."""
     grouped: dict[tuple[str, str, str, bool], list[dict[str, Any]]] = defaultdict(list)
@@ -172,7 +202,10 @@ def summarize_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         grouped[key].append(row)
 
     summary: list[dict[str, Any]] = []
-    for (model, arm, tone, prefill_wrong), grp in sorted(grouped.items()):
+    for model, arm, tone, prefill_wrong in sorted(
+        grouped.keys(), key=lambda k: cell_sort_key(k[0], k[1], k[2], k[3])
+    ):
+        grp = grouped[(model, arm, tone, prefill_wrong)]
         n_total = len(grp)
         parse_errors = sum(1 for r in grp if r["parse_error"])
         valid = [r for r in grp if r["applicable"] and not r["parse_error"]]
@@ -229,6 +262,8 @@ def export_logs(
         if log.status != "success" and not log.samples:
             continue
         all_rows.extend(extract_rows_from_log(log, log_name=path.name))
+
+    all_rows.sort(key=row_sort_key)
 
     out_csv.parent.mkdir(parents=True, exist_ok=True)
     with out_csv.open("w", encoding="utf-8", newline="") as f:
