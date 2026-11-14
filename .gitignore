@@ -21,3 +21,7 @@ outputs/
 .DS_Store
 Thumbs.db
 .vscode/
+
+# Gated GPQA question text (see items/README_items.md) — never commit
+items/mcq_70.json
+items/mcq_reserve.json
